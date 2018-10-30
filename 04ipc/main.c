@@ -4,21 +4,40 @@
 #include "xtimer.h"
 #include "msg.h"
 
+#define INTERVAL_FIX 200 * US_PER_MS
+
 // Выделение памяти под стеки двух тредов
 char thread_one_stack[THREAD_STACKSIZE_DEFAULT];
 char thread_two_stack[THREAD_STACKSIZE_DEFAULT];
+
+
+
+xtimer_ticks32_t lastActivate;
 
 // Глобально объявляется структура, которая будет хранить PID (идентификатор треда)
 // Нам нужно знать этот идентификатор, чтобы посылать сообщения в тред
 static kernel_pid_t thread_one_pid;
 
+uint32_t count_ticks = 2;
 // Обработчик прерывания с кнопки
 void btn_handler(void *arg)
 {
   // Прием аргументов из главного потока
   (void)arg;
+
+  if(xtimer_now().ticks32 - lastActivate.ticks32 < INTERVAL_FIX)
+	  return;
+
+  lastActivate = xtimer_now();
+
+  if(count_ticks < 10)
+	  count_ticks += 2;
+  else
+	  count_ticks = 2;
   // Создание объекта для хранения сообщения
   msg_t msg;
+
+  msg.content.value = count_ticks;
   // Поскольку прерывание вызывается и на фронте, и на спаде, нам нужно выяснить, что именно вызвало обработчик
   // для этого читаем значение пина с кнопкой. Если прочитали высокое состояние - то это был фронт.  
   if (gpio_read(GPIO_PIN(PORT_A,0)) > 0){
@@ -38,12 +57,23 @@ void *thread_one(void *arg)
   msg_t msg;
   // Инициализация пина PC8 на выход
   gpio_init(GPIO_PIN(PORT_C,8),GPIO_OUT);
+
+  xtimer_ticks32_t wakeup = xtimer_now();
+
   while(1){
     // Ждем, пока придет сообщение
     // msg_receive - это блокирующая операция, поэтому задача зависнет в этом месте, пока не придет сообщение
   	msg_receive(&msg);
+
+	printf("\r\nRecieve %li\r\n",msg.content.value );
+	uint32_t countTick = msg.content.value;
+	while(countTick > 0)
+	{
+		xtimer_periodic_wakeup(&wakeup, 500 * US_PER_MS );
+		gpio_toggle(GPIO_PIN(PORT_C, 8));
+		countTick -= 1;
+	}
     // Переключаем светодиод
-    gpio_toggle(GPIO_PIN(PORT_C,8));
   }
   // Хотя код до сюда не должен дойти, написать возврат NULL все же обязательно надо    
   return NULL;
@@ -87,6 +117,8 @@ int main(void)
   thread_create(thread_two_stack, sizeof(thread_two_stack),
                   THREAD_PRIORITY_MAIN - 2, THREAD_CREATE_STACKTEST,
                   thread_two, NULL, "thread_two");
+  
+  lastActivate = xtimer_now();
 
   while (1){
 
@@ -96,7 +128,7 @@ int main(void)
 }
 
 /* 
-  Задание 1: Добавьте в код подавление дребезга кнопки
+  Задание 1: Добавьте в код подавление дребезга кнопки 1+
   Задание 2: Сделайте так, чтобы из прерывания по нажатию кнопки в поток thread_one передавалось целое число,
               которое означает, сколько раз должен моргнуть светодиод на пине PC8 после нажатия кнопки.
               После каждого нажатия циклически инкрементируйте значение от 1 до 5.

@@ -4,46 +4,55 @@
 #include "timex.h"
 #include "periph/gpio.h"
 
-// Выделение памяти под стек первого треда
-// Размер выделяемого стека задан макросом THREAD_STACKSIZE_DEFAULT
-char stack_one[THREAD_STACKSIZE_DEFAULT];
+char stack_one[THREAD_STACKSIZE_MEDIUM];
+char stack_two[THREAD_STACKSIZE_MEDIUM];
 
-// Это первый поток
-void *thread_one(void *arg)
+#define INTERVAL_BLUE 100 * US_PER_MS
+#define INTERVAL_GREEN 500 * US_PER_MS
+
+struct blinkData{
+	gpio_t pin;
+	uint32_t period;
+};
+
+void *thread_handler(void *arg)
 {
-    // Прием аргументов из главного потока
-    (void) arg;
-    // ВременнАя метка для отсчета времени сна
+    struct blinkData * data = (struct blinkData *) arg;
+
+    gpio_t pin = data->pin;
+    uint32_t period = data->period;
+
+    gpio_init(pin, GPIO_OUT);
+
     xtimer_ticks32_t last_wakeup_one = xtimer_now();
+
     while(1){
-        // Переключение состояния пина PC8
-    	gpio_toggle(GPIO_PIN(PORT_C,8));
-        // Поток засыпает на 100000 микросекунд
-    	xtimer_periodic_wakeup(&last_wakeup_one, 100000);
+    	xtimer_periodic_wakeup(&last_wakeup_one, period);
+	gpio_toggle(pin);
     }
     return NULL;
 }
 
 
+
 int main(void)
 {
-    // Инициализация пина PC8 на выход
-	gpio_init(GPIO_PIN(PORT_C,8), GPIO_OUT);
 
-    // Создание потока
-    // stack_one - выделенная под стек память
-    // sizeof(stack_one) - размер стека
-    // THREAD_PRIORITY_MAIN-1 - приоритет потока на 1 больше, чем у потока main.
-    // THREAD_CREATE_STACKTEST - флаги, которые создают маркеры использования стека
-    // thread_one - имя потока
-    // NULL - передаваемые в поток аргументы
-    // "thread_one" - дескриптор
+    struct blinkData blueData = {GPIO_PIN(PORT_C, 8), INTERVAL_BLUE};
+    struct blinkData greenData = {GPIO_PIN(PORT_C, 9), INTERVAL_GREEN };
+
     thread_create(stack_one, sizeof(stack_one),
                     THREAD_PRIORITY_MAIN-1,
                     THREAD_CREATE_STACKTEST,
-                    thread_one,
-                    NULL, "thread_one");
+                    thread_handler,
+                    &blueData, "thread_one");
 
+    thread_create(stack_two, sizeof(stack_two),
+		    THREAD_PRIORITY_MAIN-1,
+		    THREAD_CREATE_STACKTEST,
+		    thread_handler,
+		    &greenData, "thread two"
+		    );
     return 0;
 }
 

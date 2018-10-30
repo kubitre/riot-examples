@@ -6,7 +6,7 @@ APPLICATION = button
 
 # Путь, по которому располагается корень исходников RIOT
 # Путь задается относительно текущей папки. 
-RIOTBASE ?= $(CURDIR)/../../RIOT
+RIOTBASE ?= /home/kubitre/RIOT/RIOT/
 
 # Название платы, для которой происходит сборка проекта
 BOARD ?= stm32f0discovery

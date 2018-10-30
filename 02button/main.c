@@ -3,15 +3,27 @@
 #include "timex.h"
 #include "periph/gpio.h"
 
-// Обработчик прерывания по нажатию кнопки
-void btn_handler(void *arg)
-{
-  // Прием аргументов, передаваемых из главного потока.
-  (void)arg;
-  // Переключение состояния пина PC8
-  gpio_toggle(GPIO_PIN(PORT_C, 8));
-}
+#define INTERVAL_FIX 50000
+xtimer_ticks32_t lastActivate;
 
+// Обработчик прерывания по нажатию кнопки
+
+void btn_handler_both(void *arg)
+{
+   (void)arg;
+
+    if(xtimer_now().ticks32 - lastActivate.ticks32 < INTERVAL_FIX)
+	   return;
+
+    if(gpio_read(GPIO_PIN(PORT_A, 0)) == 1)
+    {
+	gpio_toggle(GPIO_PIN(PORT_C, 8));
+    }
+    else
+    {
+	gpio_toggle(GPIO_PIN(PORT_C, 8));
+    }
+}
 
 int main(void)
 {
@@ -19,17 +31,19 @@ int main(void)
   // GPIO_RISING - прерывание срабатывает по фронту
   // btn_handler - имя функции обработчика прерывания
   // NULL - ничего не передаем в аргументах
-  gpio_init_int(GPIO_PIN(PORT_A, 0), GPIO_IN, GPIO_RISING, btn_handler, NULL);
+  gpio_init_int(GPIO_PIN(PORT_A, 0), GPIO_IN, GPIO_BOTH, btn_handler_both, NULL);
   // Инициализация пина PC8 на выход
-	gpio_init(GPIO_PIN(PORT_C, 8), GPIO_OUT);
+  gpio_init(GPIO_PIN(PORT_C, 8), GPIO_OUT);
 
-  while(1){}
+  lastActivate = xtimer_now();
+  while(1){
+  }
   return 0;
 }
 
 /*
 Задание 1. Подавите дребезг контакта кнопки. Для этого запомните время, когда вызвалось прерывание, 
-            и при последующем вызове, если не прошло 100 мс, не переключайте светодиод.
+            и при последующем вызове, если не прошло 100 мс, не переключайте светодиод. 1+
 Задание 2. Сделайте так, чтобы при удержании кнопки светодиод светился, а при отпускании - гас. 
             В этом случае нужно заставить прерывание срабатывать и на фронт, и на спад. 
             Это задается при инициализации прерывания макросом GPIO_BOTH. 
